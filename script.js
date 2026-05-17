@@ -1,23 +1,23 @@
 fetch("data.json")
-  .then(r => r.json())
+  .then(response => response.json())
   .then(data => {
-    const div = document.getElementById("conteudo");
-    div.innerHTML = "";
+    const container = document.getElementById("conteudo");
+    container.innerHTML = "";
 
-    data.forEach(o => {
-      const item = document.createElement("div");
+    data.forEach(oferta => {
+      const div = document.createElement("div");
 
-      item.innerHTML = `
-        <h3><a href="${o.link}" target="_blank">${o.titulo}</a></h3>
-        <p><strong>${o.entidade}</strong></p>
-        <p>Data: ${o.data}</p>
+      div.innerHTML = `
+        <h3><a href="${oferta.link}" target="_blank">${oferta.titulo}</a></h3>
+        <p><strong>${oferta.entidade}</strong></p>
+        <p>Data: ${oferta.data}</p>
         <hr>
       `;
 
-      div.appendChild(item);
+      container.appendChild(div);
     });
   })
-  .catch(() => {
-    document.getElementById("conteudo").innerText = "Erro a carregar dados.";
+  .catch(error => {
+    document.getElementById("conteudo").innerText = "Erro ao carregar dados.";
+    console.error(error);
   });
-
