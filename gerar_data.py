@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import time
 import requests
 
 def extrair_e_acumular():
@@ -18,37 +19,33 @@ def extrair_e_acumular():
         except Exception as e:
             print(f"Aviso ao ler histórico: {e}")
 
-    # URL oficial do Feed RSS que queremos capturar e ler
-    url_bep_rss = "https://bep.gov.pt"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
 
-    # 2. Forçar a Wayback Machine a gravar uma cópia fresca neste exato momento
-    url_gravar_arquivo = f"https://archive.org{url_bep_rss}"
+    # 2. Forçar a Wayback Machine a gravar uma cópia fresca da BEP (URLs 100% estáticos)
+    url_save_api = "https://archive.org"
     print("A ordenar à Wayback Machine que grave uma cópia fresca da BEP...")
     try:
-        # Faz o pedido de gravação e ignora se der aviso (o arquivo processa em background)
-        requests.get(url_gravar_arquivo, headers=headers, timeout=15)
+        requests.get(url_save_api, headers=headers, timeout=15)
         print("Ordem de gravação enviada com sucesso para o Internet Archive.")
     except Exception as erro_save:
         print(f"Aviso na ordem de gravação (ignorado): {erro_save}")
 
-    # 3. Consultar a API do Wayback para obter a captura mais recente disponível
-    url_api_archive = f"https://archive.org{url_bep_rss}"
-    
+    # 4. Consultar a API do Wayback para obter a captura mais recente (URL 100% estático)
+    url_query_api = "https://archive.org"
     print("A consultar a disponibilidade da última cópia arquivada...")
     try:
-        resposta_api = requests.get(url_api_archive, headers=headers, timeout=15)
+        resposta_api = requests.get(url_query_api, headers=headers, timeout=15)
         if resposta_api.status_code == 200:
             dados_api = resposta_api.json()
             snapshot = dados_api.get("archived_snapshots", {}).get("closest", {})
             
             if not snapshot or not snapshot.get("url"):
                 print("Nenhuma captura encontrada. A usar rota de contingência direta...")
-                url_alvo = f"https://archive.org{url_bep_rss}"
+                url_alvo = "https://archive.org"
             else:
-                # O modificador 'im_' obriga o Internet Archive a dar o XML puro
+                # O modificador 'im_' obriga o Internet Archive a fornecer o XML bruto
                 url_alvo = snapshot.get("url").replace("/web/", "/web/20260000000000im_/")
                 
             print(f"A descarregar o XML imune a bloqueios de: {url_alvo}")
@@ -57,7 +54,7 @@ def extrair_e_acumular():
             if resposta_xml.status_code == 200:
                 texto_cru = resposta_xml.text
                 
-                # Isola os blocos <item> textualmente usando Regex (imune a erros de tags da BEP)
+                # Isola os blocos <item> usando Regex
                 blocos_item = re.findall(r'<item>(.*?)</item>', texto_cru, re.DOTALL | re.IGNORECASE)
                 print(f"Sucesso! Detetados {len(blocos_item)} anúncios de emprego no arquivo.")
                 
@@ -71,12 +68,10 @@ def extrair_e_acumular():
                     link_original = match_link.group(1).strip() if match_link else ""
                     descricao_completa = match_desc.group(1).strip() if match_desc else ""
                     
-                    # Limpa marcações de dados CDATA se existirem
                     titulo_completo = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', titulo_completo, flags=re.DOTALL)
                     link_original = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', link_original, flags=re.DOTALL)
                     descricao_completa = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', descricao_completa, flags=re.DOTALL)
                     
-                    # Remove prefixos internos que a Wayback Machine cola às vezes nos links
                     link_original = re.sub(r'^https:\/\/web\.archive\.org\/web\/\d+im_\/', '', link_original)
                     
                     if link_original and "www." not in link_original:
@@ -86,8 +81,8 @@ def extrair_e_acumular():
                     id_vaga = int(match_id.group(1)) if match_id else abs(hash(titulo_completo)) % 1000000
                     
                     partes = titulo_completo.split(" - ")
-                    titulo_vaga = partes[0].strip() if len(partes) > 0 else titulo_completo
-                    organismo = partes[1].strip() if len(partes) > 1 else "Administração Pública Portuguesa"
+                    titulo_vaga = partes.strip() if len(partes) > 0 else titulo_completo
+                    organismo = partes.strip() if len(partes) > 1 else "Administração Pública Portuguesa"
                     
                     novas_ofertas.append({
                         "id": id_vaga,
@@ -116,7 +111,7 @@ def extrair_e_acumular():
                     })
                     print(f"-> Vaga extraída: ID {id_vaga} - {titulo_vaga}")
                 
-                # 4. Fusão incremental (Merge) sem duplicados
+                # 5. Fusão incremental (Merge)
                 vagas_mapeadas = {vaga["id"]: vaga for vaga in ofertas_antigas}
                 for nova_vaga in novas_ofertas:
                     vagas_mapeadas[nova_vaga["id"]] = nova_vaga
@@ -128,7 +123,7 @@ def extrair_e_acumular():
                     json.dump(lista_final, f, ensure_ascii=False, indent=4)
                     
                 with open("estado.json", "w", encoding="utf-8") as f:
-                    json.dump({"ultimo_id": lista_final[0]["id"] if lista_final else 0, "total_acumulado": len(lista_final)}, f, indent=4)
+                    json.dump({"ultimo_id": lista_final["id"] if lista_final else 0, "total_acumulado": len(lista_final)}, f, indent=4)
                     
                 print(f"Sucesso! Ficheiro data.json sincronizado com {len(lista_final)}/200 vagas totais.")
             else:
