@@ -2,8 +2,8 @@ name: Executar Scraper BEP Automático
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    - cron: '0 */6 * * *'  # Corre automaticamente de 6 em 6 horas
+  workflow_dispatch:       # Permite executar manualmente com um botão
 
 permissions:
   contents: write
@@ -20,9 +20,9 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Instalar Dependências Necessárias
-      # Instalamos a biblioteca bs4 para lidar com o erro de XML malformado
-      run: pip install requests beautifulsoup4
+    - name: Instalar Dependências Necessárias na Máquina Virtual
+      # Isto instala apenas no computador temporário da nuvem do GitHub
+      run: pip install requests beautifulsoup4 lxml
 
     - name: Executar Atualização e Acumulação Python
       run: python gerar_data.py
