@@ -15,7 +15,7 @@ def obter_ip_via_doh():
                     return resposta_dns.get("data")
     except:
         pass
-    return "194.110.76.232" # Fallback estável que provou funcionar
+    return "194.110.76.232"
 
 def extrair_e_acumular():
     ficheiro_dados = "data.json"
@@ -44,8 +44,14 @@ def extrair_e_acumular():
         if resposta.status_code == 200:
             resposta.encoding = 'utf-8'
             
-            # Usamos o html.parser do BeautifulSoup que ignora erros de tags e atributos duplicados do XML da BEP
-            soup = BeautifulSoup(resposta.text, "html.parser")
+            # --- COMO VER O XML ORIGINAL ---
+            # Imprime os primeiros 1000 caracteres no log do GitHub Actions para auditoria visual
+            print("\n=== CONTEÚDO DO XML ORIGINAL DESCARREGADO (PREVIEW) ===")
+            print(resposta.text[:1000])
+            print("========================================================\n")
+            
+            # Usamos o leitor "xml" (em vez de html.parser) para capturar as tags nativas corretamente
+            soup = BeautifulSoup(resposta.text, "xml")
             items = soup.find_all("item")
             
             print(f"Sucesso! Encontradas {len(items)} ofertas no XML original da BEP.")
@@ -92,7 +98,6 @@ def extrair_e_acumular():
                     }
                 })
             
-            # Unir listas e remover duplicados
             vagas_mapeadas = {vaga["id"]: vaga for vaga in ofertas_antigas}
             for nova_vaga in novas_ofertas:
                 if nova_vaga["id"] > 0:
