@@ -2,44 +2,50 @@ import requests
 from bs4 import BeautifulSoup
 import json
 
-URL = "https://www.bep.gov.pt/pages/oferta/Oferta_Listar.aspx"
-headers = {"User-Agent": "Mozilla/5.0"}
+url = "https://www.bep.gov.pt/pages/oferta/Oferta_Listar.aspx"
 
-session = requests.Session()
-empregos = []
+headers = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "text/html",
+    "Accept-Language": "pt-PT,pt;q=0.9"
+}
 
-response = session.get(URL, headers=headers)
+response = requests.get(url, headers=headers)
+
 soup = BeautifulSoup(response.text, "html.parser")
 
-tabela = soup.find("table")
+empregos = []
 
-if tabela:
-    linhas = tabela.find_all("tr")[1:]
+# 🔍 procurar links das ofertas
+links = soup.select("a")
 
-    for linha in linhas:
-        colunas = linha.find_all("td")
+for link in links:
+    href = link.get("href")
+    texto = link.get_text(strip=True)
 
-        if len(colunas) >= 4:
-            titulo = colunas[0].get_text(strip=True)
-            entidade = colunas[1].get_text(strip=True)
-            local = colunas[2].get_text(strip=True)
-            data = colunas[3].get_text(strip=True)
+    if href and "Oferta" in href and texto:
 
-            link_tag = colunas[0].find("a")
-            link = "https://www.bep.gov.pt" + link_tag["href"] if link_tag else ""
+        empregos.append({
+            "titulo": texto,
+            "entidade": "",
+            "local": "",
+            "data": "",
+            "link": "https://www.bep.gov.pt" + href
+        })
 
-            empregos.append({
-                "titulo": titulo,
-                "entidade": entidade,
-                "local": local,
-                "data": data,
-                "link": link
-            })
+# limpar duplicados
+vistos = set()
+resultado = []
+
+for e in empregos:
+    if e["link"] not in vistos:
+        vistos.add(e["link"])
+        resultado.append(e)
 
 # limitar a 200
-empregos = empregos[:200]
+resultado = resultado[:200]
 
 with open("data.json", "w", encoding="utf-8") as f:
-    json.dump(empregos, f, ensure_ascii=False, indent=2)
+    json.dump(resultado, f, ensure_ascii=False, indent=2)
 
-print(f"{len(empregos)} empregos guardados")
+print("OK:", len(resultado), "empregos encontrados")
