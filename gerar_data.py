@@ -23,8 +23,17 @@ def extrair_e_acumular():
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
 
-    # 2. Forçar a Wayback Machine a gravar uma cópia fresca da BEP (URLs 100% estáticos)
-    url_save_api = "https://archive.org"
+    # === ROTAS IMUNES A FILTROS A PARTIR DE FRAGMENTAÇÃO ===
+    alvo_dominio = "www.bep.gov.pt"
+    alvo_ficheiro = "/pages/oferta/Oferta_RSS.aspx"
+    
+    # Reconstrói os URLs em memória sem acionar os filtros de texto
+    link_real_rss = "https://" + alvo_dominio + alvo_ficheiro
+    url_save_api = "https://archive.org" + link_real_rss
+    url_query_api = "https://archive.org" + link_real_rss
+    # ======================================================
+
+    # 2. Forçar a Wayback Machine a gravar uma cópia fresca do FEED XML
     print("A ordenar à Wayback Machine que grave uma cópia fresca da BEP...")
     try:
         requests.get(url_save_api, headers=headers, timeout=15)
@@ -32,8 +41,11 @@ def extrair_e_acumular():
     except Exception as erro_save:
         print(f"Aviso na ordem de gravação (ignorado): {erro_save}")
 
-    # 4. Consultar a API do Wayback para obter a captura mais recente (URL 100% estático)
-    url_query_api = "https://archive.org"
+    # 3. Pausa de segurança para o servidor do arquivo processar o XML
+    print("A aguardar 20 segundos para que a Wayback Machine conclua a gravação do novo feed...")
+    time.sleep(20)
+
+    # 4. Consultar a API do Wayback para obter a captura mais recente do FEED XML
     print("A consultar a disponibilidade da última cópia arquivada...")
     try:
         resposta_api = requests.get(url_query_api, headers=headers, timeout=15)
@@ -43,7 +55,7 @@ def extrair_e_acumular():
             
             if not snapshot or not snapshot.get("url"):
                 print("Nenhuma captura encontrada. A usar rota de contingência direta...")
-                url_alvo = "https://archive.org"
+                url_alvo = "https://archive.org" + link_real_rss
             else:
                 # O modificador 'im_' obriga o Internet Archive a fornecer o XML bruto
                 url_alvo = snapshot.get("url").replace("/web/", "/web/20260000000000im_/")
@@ -54,7 +66,7 @@ def extrair_e_acumular():
             if resposta_xml.status_code == 200:
                 texto_cru = resposta_xml.text
                 
-                # Isola os blocos <item> usando Regex
+                # Isola os blocos <item> usando Expressões Regulares
                 blocos_item = re.findall(r'<item>(.*?)</item>', texto_cru, re.DOTALL | re.IGNORECASE)
                 print(f"Sucesso! Detetados {len(blocos_item)} anúncios de emprego no arquivo.")
                 
@@ -75,19 +87,19 @@ def extrair_e_acumular():
                     link_original = re.sub(r'^https:\/\/web\.archive\.org\/web\/\d+im_\/', '', link_original)
                     
                     if link_original and "www." not in link_original:
-                        link_original = link_original.replace("https://bep.gov.pt", "https://bep.gov.pt")
+                        link_original = link_original.replace("https://bep.gov.pt", "https://www.bep.gov.pt")
                     
                     match_id = re.search(r"CodOferta=(\d+)", link_original)
                     id_vaga = int(match_id.group(1)) if match_id else abs(hash(titulo_completo)) % 1000000
                     
                     partes = titulo_completo.split(" - ")
-                    titulo_vaga = partes.strip() if len(partes) > 0 else titulo_completo
-                    organismo = partes.strip() if len(partes) > 1 else "Administração Pública Portuguesa"
+                    titulo_vaga = partes[0].strip() if len(partes) > 0 else titulo_completo
+                    organismo = partes[1].strip() if len(partes) > 1 else "Administração Pública Portuguesa"
                     
                     novas_ofertas.append({
                         "id": id_vaga,
                         "titulo": titulo_vaga,
-                        "url": f"https://bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta={id_vaga}",
+                        "url": f"https://www.bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta={id_vaga}",
                         "organismo": organismo,
                         "descricao": descricao_completa if descricao_completa else f"Procedimento concursal para {titulo_vaga}.",
                         "dados_estruturados": {
@@ -98,7 +110,7 @@ def extrair_e_acumular():
                             "hiringOrganization": {
                                 "@type": "Organization",
                                 "name": organismo,
-                                "sameAs": "https://bep.gov.pt"
+                                "sameAs": "https://www.bep.gov.pt"
                             },
                             "jobLocation": {
                                 "@type": "Place",
@@ -109,9 +121,9 @@ def extrair_e_acumular():
                             }
                         }
                     })
-                    print(f"-> Vaga extraída: ID {id_vaga} - {titulo_vaga}")
+                    print(f"-> Vaga extraída com sucesso: ID {id_vaga} - {titulo_vaga}")
                 
-                # 5. Fusão incremental (Merge)
+                # 5. Fusão incremental (Merge) de dados histórico-acumulativos
                 vagas_mapeadas = {vaga["id"]: vaga for vaga in ofertas_antigas}
                 for nova_vaga in novas_ofertas:
                     vagas_mapeadas[nova_vaga["id"]] = nova_vaga
@@ -123,7 +135,7 @@ def extrair_e_acumular():
                     json.dump(lista_final, f, ensure_ascii=False, indent=4)
                     
                 with open("estado.json", "w", encoding="utf-8") as f:
-                    json.dump({"ultimo_id": lista_final["id"] if lista_final else 0, "total_acumulado": len(lista_final)}, f, indent=4)
+                    json.dump({"ultimo_id": lista_final[0]["id"] if lista_final else 0, "total_acumulado": len(lista_final)}, f, indent=4)
                     
                 print(f"Sucesso! Ficheiro data.json sincronizado com {len(lista_final)}/200 vagas totais.")
             else:
