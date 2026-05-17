@@ -29,7 +29,7 @@ def get_oferta(cod):
     url = BASE_URL + str(cod)
 
     try:
-        r = requests.get(url, headers=HEADERS, timeout=10)
+        r = requests.get(url, headers=HEADERS, timeout=1)
 
         if r.status_code != 200:
             return None
@@ -76,7 +76,7 @@ def main():
 
     print(f"Início em {cod}")
 
-    while len(ofertas) < TOTAL and tentativas < 100:
+    while len(ofertas) < TOTAL and tentativas < 10:
         oferta = get_oferta(cod)
 
         if oferta:
