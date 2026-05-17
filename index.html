@@ -1,148 +1,19 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt">
 <head>
-<meta charset="UTF-8">
-<title>Ofertas BEP</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<!-- Structured Data base (será atualizado dinamicamente) -->
-<script type="application/ld+json" id="jobSchema"></script>
-
-<style>
-    body {
-        font-family: Arial;
-        margin: 20px;
-        background: #f5f5f5;
-    }
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        background: white;
-        margin-top: 20px;
-    }
-    th, td {
-        border: 1px solid #ccc;
-        padding: 8px;
-    }
-    th {
-        background: #0078d4;
-        color: white;
-    }
-    button {
-        padding: 10px 15px;
-        margin: 5px;
-        cursor: pointer;
-    }
-</style>
-
+  <meta charset="UTF-8">
+  <title>Empregos Públicos</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<h1>📊 Ofertas de Emprego Público (BEP)</h1>
+<h1>Ofertas de Emprego</h1>
 
-<button onclick="carregarOfertas()">Carregar Ofertas</button>
+<input type="text" id="search" placeholder="Pesquisar..." />
 
-<table id="tabela">
-    <thead>
-        <tr>
-            <th>Código</th>
-            <th>Título</th>
-            <th>Entidade</th>
-            <th>Local</th>
-            <th>Data</th>
-            <th>Hiperligação</th>
-        </tr>
-    </thead>
-    <tbody></tbody>
-</table>
+<ul id="jobs"></ul>
 
-<script>
-let codInicial = 147969;
-let quantidade = 5; // quantas ofertas carregar
-
-async function carregarOfertas() {
-    const tbody = document.querySelector("#tabela tbody");
-    tbody.innerHTML = "";
-
-    for (let i = 0; i < quantidade; i++) {
-        let codOferta = codInicial + i;
-
-        // ⚠️ Substituir por backend/proxy real
-        let url = `https://www.bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta=${codOferta}`;
-
-        try {
-            // Simulação (porque BEP bloqueia)
-            let dados = gerarDadosFake(codOferta);
-
-            adicionarTabela(dados);
-            atualizarSchema(dados);
-
-        } catch (erro) {
-            console.error("Erro:", erro);
-        }
-    }
-}
-
-// Simula scraping (substituir por API real)
-function gerarDadosFake(cod) {
-    return {
-        codigo: cod,
-        titulo: "Técnico Superior",
-        entidade: "Câmara Municipal",
-        local: "Lisboa",
-        data: "2026-05-10",
-        link: `https://www.bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta=${cod}`
-    };
-}
-
-function adicionarTabela(d) {
-    const tbody = document.querySelector("#tabela tbody");
-    const tr = document.createElement("tr");
-
-    tr.innerHTML = `
-        <td>${d.codigo}</td>
-        <td>${d.titulo}</td>
-        <td>${d.entidade}</td>
-        <td>${d.local}</td>
-        <td>${d.data}</td>
-        <td><a href="${d.link}" target="_blank">Ver</a></td>
-    `;
-
-    tbody.appendChild(tr);
-}
-
-// Atualiza Structured Data (Google JobPosting)
-function atualizarSchema(d) {
-    const schema = {
-        "@context": "https://schema.org",
-        "@type": "JobPosting",
-        "title": d.titulo,
-        "description": "Oferta recolhida automaticamente da BEP",
-        "datePosted": d.data,
-        "hiringOrganization": {
-            "@type": "Organization",
-            "name": d.entidade
-        },
-        "jobLocation": {
-            "@type": "Place",
-            "address": {
-                "@type": "PostalAddress",
-                "addressLocality": d.local,
-                "addressCountry": "PT"
-            }
-        },
-        "employmentType": "FULL_TIME",
-        "identifier": {
-            "@type": "PropertyValue",
-            "name": "BEP",
-            "value": d.codigo
-        }
-    };
-
-    document.getElementById("jobSchema").textContent =
-        JSON.stringify(schema, null, 2);
-}
-</script>
+<script src="script.js"></script>
 
 </body>
 </html>
