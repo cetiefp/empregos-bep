@@ -2,8 +2,8 @@ name: Executar Scraper BEP Automático
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    - cron: '0 */6 * * *'  # Executa automaticamente de 6 em 6 horas
+  workflow_dispatch:       # Ativa o botão para podermos testar manualmente
 
 permissions:
   contents: write
@@ -20,8 +20,9 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Instalar Biblioteca de Rede na Nuvem
-      run: pip install requests
+    - name: Instalar Bibliotecas de Rede e Parsers na Nuvem
+      # Instala as dependências necessárias exclusivamente na máquina temporária do GitHub
+      run: pip install requests beautifulsoup4 lxml
 
     - name: Executar Sincronização de Texto Python
       run: python gerar_data.py
@@ -29,7 +30,7 @@ jobs:
     - name: Gravar Alterações no Repositório GitHub
       run: |
         git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.email "github-actions[bot]@://github.com"
         git add data.json estado.json
-        git commit -m "Sistema: Sincronização via Wayback Machine" || echo "Sem novidades"
+        git commit -m "Sistema: Atualização incremental tolerante via XML Direto" || echo "Sem novidades"
         git push origin main
