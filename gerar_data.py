@@ -18,56 +18,67 @@ def extrair_e_acumular():
         except:
             pass
 
-    # 2. API pública do Diário da República que lista anúncios de Emprego Público em tempo real
-    url_dre = "https://diariodarepublica.pt"
+    # 2. Endpoint oficial de pesquisa da API do Diário da República Eletrónico
+    url_dre_api = "https://diariodarepublica.pt"
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    # Payload estruturado para pesquisar procedimentos concursais abertos na 2.ª Série do DRE
+    payload = {
+        "query": "procedimento concursal comum",
+        "facets": {
+            "serie": ["2"]
+        },
+        "page": 1,
+        "perPage": 20,
+        "sort": "pubDate,desc"
     }
     
-    print("A descarregar as publicações de emprego público em direto do DRE...")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Content-Type": "application/json"
+    }
+    
+    print("A descarregar os concursos públicos oficiais em direto da API do DRE...")
     try:
-        resposta = requests.get(url_dre, headers=headers, timeout=25)
+        # Fazemos um pedido POST enviando os critérios de pesquisa
+        resposta = requests.post(url_dre_api, json=payload, headers=headers, timeout=25)
+        
         if resposta.status_code == 200:
             dados = resposta.json()
-            itens = dados.get("results", [])
+            # A API do DRE devolve os resultados dentro da chave 'items'
+            itens = dados.get("items", [])
             
-            print(f"Ligação bem-sucedida! Detetadas {len(itens)} publicações no DRE.")
+            print(f"Ligação bem-sucedida! Detetadas {len(itens)} publicações recentes no DRE.")
             
             novas_ofertas = []
             for item in itens:
                 titulo_cru = item.get("title", "Procedimento Concursal")
                 sumario = item.get("summary", "")
-                link_dre = item.get("url", "https://diariodarepublica.pt")
                 id_dre = item.get("id", 0)
                 
-                # Extrai o nome da entidade pública do campo de emissor
-                organismo = item.get("issuer", {}).get("name", "Administração Pública Portuguesa")
+                # Constrói o link público para o utilizador ler o diploma completo no DRE
+                url_vaga = f"https://diariodarepublica.pt{id_dre}"
                 
-                # Tentamos pescar o CodOferta ou número do aviso para usar como âncora
+                # Extrai a entidade pública que emitiu o concurso
+                organismo = item.get("issuingBody", "Administração Pública Portuguesa")
+                
+                # Tenta capturar o número do Aviso impresso no sumário para servir de referência
                 match_aviso = re.search(r"Aviso\s+n\.\º\s+(\d+/\d+)", sumario, re.IGNORECASE)
                 codigo_aviso = match_aviso.group(1) if match_aviso else f"DRE-{id_dre}"
                 
-                # Monta a rota final de redirecionamento estável
-                titulo_vaga = f"Aviso {codigo_aviso} - {titulo_cru[:60]}..."
-                
-                # Se não houver ID numérico nativo, geramos um ID estável a partir do identificador do DRE
+                titulo_vaga = f"Aviso {codigo_aviso} - {titulo_cru[:65]}..."
                 id_vaga = int(id_dre) if str(id_dre).isdigit() else abs(hash(codigo_aviso)) % 1000000
-                
-                # URL oficial do DRE que contém o despacho e o anexo para candidatura
-                url_vaga = link_dre
 
                 novas_ofertas.append({
                     "id": id_vaga,
                     "titulo": titulo_vaga,
                     "url": url_vaga,
                     "organismo": organismo,
-                    "descricao": sumario if sumario else "Consulte os termos de abertura e prazos no despacho publicado no DRE.",
+                    "descricao": sumario if sumario else "Consulte os requisitos e termos de candidatura no Diário da República.",
                     "dados_estruturados": {
                         "@context": "https://schema.org",
                         "@type": "JobPosting",
                         "title": titulo_vaga,
-                        "description": sumario if sumario else "Detalhes de recrutamento no Diário da República.",
+                        "description": sumario if sumario else "Detalhes de recrutamento oficial no DRE.",
                         "hiringOrganization": {
                             "@type": "Organization",
                             "name": organismo,
@@ -78,34 +89,35 @@ def extrair_e_acumular():
                             "address": {
                                 "@type": "PostalAddress",
                                 "addressCountry": "PT"
-                              }
+                            }
                         }
                     }
                 })
                 print(f"-> Vaga indexada do DRE: {codigo_aviso}")
             
-            # 3. Fusão incremental (Merge) sem duplicados baseada no ID único
+            # 3. Fusão incremental (Merge) sem duplicados baseada no ID único do diploma
             vagas_mapeadas = {vaga["id"]: vaga for vaga in ofertas_antigas}
             for nova_vaga in novas_ofertas:
                 if nova_vaga["id"] > 0:
                     vagas_mapeadas[nova_vaga["id"]] = nova_vaga
                 
-            # Ordena do mais recente para o mais antigo
+            # Ordena a coleção (mais recentes primeiro)
             lista_ordenada = sorted(vagas_mapeadas.values(), key=lambda x: x["id"], reverse=True)
             lista_final = lista_ordenada[:200]
             
-            # Grava no data.json
+            # Atualiza o data.json do site estático
             with open(ficheiro_dados, "w", encoding="utf-8") as f:
                 json.dump(lista_final, f, ensure_ascii=False, indent=4)
                 
             with open("estado.json", "w", encoding="utf-8") as f:
-                json.dump({"ultimo_id": lista_final["id"] if lista_final else 0, "total_acumulado": len(lista_final)}, f, indent=4)
+                json.dump({"ultimo_id": lista_final[0]["id"] if lista_final else 0, "total_acumulado": len(lista_final)}, f, indent=4)
                 
-            print(f"Sucesso! Ficheiro data.json atualizado com {len(lista_final)}/200 vagas totais.")
+            print(f"Sucesso! Ficheiro data.json atualizado com {len(lista_final)}/200 vagas totais do DRE.")
         else:
-            print(f"O servidor do DRE respondeu com erro. Código: {resposta.status_code}")
+            print(f"A API do DRE rejeitou o pedido POST. Código HTTP: {resposta.status_code}")
+            
     except Exception as e:
-        print(f"Falha técnica na extração da API: {e}")
+        print(f"Erro no processamento dos dados da API do DRE: {e}")
 
 if __name__ == "__main__":
     extrair_e_acumular()
