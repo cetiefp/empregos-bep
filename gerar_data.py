@@ -7,7 +7,7 @@ def extrair_e_acumular():
     ficheiro_dados = "data.json"
     ofertas_antigas = []
     
-    # 1. Carrega o histórico existente do repositório GitHub
+    # 1. Carrega o histórico existente do repositório GitHub para acumular até 200
     if os.path.exists(ficheiro_dados):
         try:
             with open(ficheiro_dados, "r", encoding="utf-8") as f:
@@ -18,108 +18,94 @@ def extrair_e_acumular():
         except:
             pass
 
-    # 2. Conecta ao Feed RSS público e aberto da DGAEP (Não exige início de sessão)
-    url_rss_dgaep = "https://dgaep.gov.pt"
+    # 2. API pública do Diário da República que lista anúncios de Emprego Público em tempo real
+    url_dre = "https://diariodarepublica.pt"
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
     
-    print("A descarregar o fluxo de anúncios públicos da DGAEP...")
+    print("A descarregar as publicações de emprego público em direto do DRE...")
     try:
-        resposta = requests.get(url_rss_dgaep, headers=headers, timeout=25)
+        resposta = requests.get(url_dre, headers=headers, timeout=25)
         if resposta.status_code == 200:
-            resposta.encoding = 'utf-8'
-            texto_cru = resposta.text
+            dados = resposta.json()
+            itens = dados.get("results", [])
             
-            # Isola os blocos <item> do feed por texto bruto
-            blocos_item = re.findall(r'<item>(.*?)</item>', texto_cru, re.DOTALL | re.IGNORECASE)
-            print(f"Ligação bem-sucedida! Detetados {len(blocos_item)} anúncios no feed aberto.")
+            print(f"Ligação bem-sucedida! Detetadas {len(itens)} publicações no DRE.")
             
             novas_ofertas = []
-            for bloco in blocos_item:
-                match_title = re.search(r'<title>(.*?)</title>', bloco, re.DOTALL | re.IGNORECASE)
-                match_link = re.search(r'<link>(.*?)</link>', bloco, re.DOTALL | re.IGNORECASE)
-                match_desc = re.search(r'<description>(.*?)</description>', bloco, re.DOTALL | re.IGNORECASE)
+            for item in itens:
+                titulo_cru = item.get("title", "Procedimento Concursal")
+                sumario = item.get("summary", "")
+                link_dre = item.get("url", "https://diariodarepublica.pt")
+                id_dre = item.get("id", 0)
                 
-                titulo_completo = match_title.group(1).strip() if match_title else "Oferta de Emprego Público"
-                link_original = match_link.group(1).strip() if match_link else ""
-                descricao_completa = match_desc.group(1).strip() if match_desc else ""
+                # Extrai o nome da entidade pública do campo de emissor
+                organismo = item.get("issuer", {}).get("name", "Administração Pública Portuguesa")
                 
-                # Remove CDATA se presente
-                titulo_completo = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', titulo_completo, flags=re.DOTALL)
-                link_original = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', link_original, flags=re.DOTALL)
-                descricao_completa = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', descricao_completa, flags=re.DOTALL)
+                # Tentamos pescar o CodOferta ou número do aviso para usar como âncora
+                match_aviso = re.search(r"Aviso\s+n\.\º\s+(\d+/\d+)", sumario, re.IGNORECASE)
+                codigo_aviso = match_aviso.group(1) if match_aviso else f"DRE-{id_dre}"
                 
-                # Se o anúncio contiver ou apontar para a BEP, extraímos o ID
-                id_vaga = 0
-                match_id = re.search(r"CodOferta=(\d+)", link_original)
-                if match_id:
-                    id_vaga = int(match_id.group(1))
-                else:
-                    # Se o link for da DGAEP, extraímos o ID interno do artigo para servir de âncora única
-                    match_id_alt = re.search(r"CE=(\d+)", link_original) or re.search(r"id=(\d+)", link_original)
-                    if match_id_alt:
-                        id_vaga = int(match_id_alt.group(1))
-                    else:
-                        # Fallback seguro baseado na assinatura do título para não perder a vaga
-                        id_vaga = abs(hash(titulo_completo)) % 1000000
+                # Monta a rota final de redirecionamento estável
+                titulo_vaga = f"Aviso {codigo_aviso} - {titulo_cru[:60]}..."
                 
-                # Reconstrói o URL canónico da BEP para garantir que o utilizador vai para o sítio certo
-                url_bep_final = f"https://bep.gov.pt{id_vaga}" if match_id else link_original
+                # Se não houver ID numérico nativo, geramos um ID estável a partir do identificador do DRE
+                id_vaga = int(id_dre) if str(id_dre).isdigit() else abs(hash(codigo_aviso)) % 1000000
                 
-                partes = titulo_completo.split(" - ")
-                titulo_vaga = partes[0].strip() if len(partes) > 0 else titulo_completo
-                organismo = partes[1].strip() if len(partes) > 1 else "Administração Pública Portuguesa"
-                
-                if id_vaga > 0:
-                    novas_ofertas.append({
-                        "id": id_vaga,
-                        "titulo": titulo_vaga,
-                        "url": url_bep_final,
-                        "organismo": organismo,
-                        "descricao": descricao_completa if descricao_completa else f"Procedimento concursal publicado para {titulo_vaga}.",
-                        "dados_estruturados": {
-                            "@context": "https://schema.org",
-                            "@type": "JobPosting",
-                            "title": titulo_vaga,
-                            "description": descricao_completa if descricao_completa else "Consulte os termos no portal oficial.",
-                            "hiringOrganization": {
-                                "@type": "Organization",
-                                "name": organismo,
-                                "sameAs": "https://www.bep.gov.pt"
-                            },
-                            "jobLocation": {
-                                "@type": "Place",
-                                "address": {
-                                    "@type": "PostalAddress",
-                                    "addressCountry": "PT"
-                                }
-                            }
+                # URL oficial do DRE que contém o despacho e o anexo para candidatura
+                url_vaga = link_dre
+
+                novas_ofertas.append({
+                    "id": id_vaga,
+                    "titulo": titulo_vaga,
+                    "url": url_vaga,
+                    "organismo": organismo,
+                    "descricao": sumario if sumario else "Consulte os termos de abertura e prazos no despacho publicado no DRE.",
+                    "dados_estruturados": {
+                        "@context": "https://schema.org",
+                        "@type": "JobPosting",
+                        "title": titulo_vaga,
+                        "description": sumario if sumario else "Detalhes de recrutamento no Diário da República.",
+                        "hiringOrganization": {
+                            "@type": "Organization",
+                            "name": organismo,
+                            "sameAs": "https://diariodarepublica.pt"
+                        },
+                        "jobLocation": {
+                            "@type": "Place",
+                            "address": {
+                                "@type": "PostalAddress",
+                                "addressCountry": "PT"
+                              }
                         }
-                    })
-                    print(f"-> Vaga extraída: ID {id_vaga} - {titulo_vaga}")
+                    }
+                })
+                print(f"-> Vaga indexada do DRE: {codigo_aviso}")
             
-            # 3. Fusão incremental (Merge) sem duplicados
+            # 3. Fusão incremental (Merge) sem duplicados baseada no ID único
             vagas_mapeadas = {vaga["id"]: vaga for vaga in ofertas_antigas}
             for nova_vaga in novas_ofertas:
-                vagas_mapeadas[nova_vaga["id"]] = nova_vaga
+                if nova_vaga["id"] > 0:
+                    vagas_mapeadas[nova_vaga["id"]] = nova_vaga
                 
+            # Ordena do mais recente para o mais antigo
             lista_ordenada = sorted(vagas_mapeadas.values(), key=lambda x: x["id"], reverse=True)
             lista_final = lista_ordenada[:200]
             
-            # Grava os resultados finais
+            # Grava no data.json
             with open(ficheiro_dados, "w", encoding="utf-8") as f:
                 json.dump(lista_final, f, ensure_ascii=False, indent=4)
                 
             with open("estado.json", "w", encoding="utf-8") as f:
-                json.dump({"ultimo_id": lista_final[0]["id"] if lista_final else 0, "total_acumulado": len(lista_final)}, f, indent=4)
+                json.dump({"ultimo_id": lista_final["id"] if lista_final else 0, "total_acumulado": len(lista_final)}, f, indent=4)
                 
             print(f"Sucesso! Ficheiro data.json atualizado com {len(lista_final)}/200 vagas totais.")
         else:
-            print(f"O servidor da DGAEP respondeu com erro. Código: {resposta.status_code}")
+            print(f"O servidor do DRE respondeu com erro. Código: {resposta.status_code}")
     except Exception as e:
-        print(f"Falha na extração de dados do feed: {e}")
+        print(f"Falha técnica na extração da API: {e}")
 
 if __name__ == "__main__":
     extrair_e_acumular()
