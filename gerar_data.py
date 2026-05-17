@@ -1,27 +1,31 @@
-def obter_oferta(cod):
-    url = f"{BASE_URL}{cod}"
-    try:
-        r = requests.get(url, timeout=10)
+function formatarData(dataStr) {
+  if (!dataStr) return '';
 
-        if r.status_code != 200:
-            return None
+  // tenta converter formato português (dd-mm-yyyy)
+  const partes = dataStr.split(/[-\/]/);
 
-        soup = BeautifulSoup(r.text, "html.parser")
+  if (partes.length === 3) {
+    const data = new Date(`${partes[2]}-${partes[1]}-${partes[0]}`);
+    return data.toLocaleDateString('pt-PT');
+  }
 
-        titulo = soup.find("span", id="ctl00_ContentPlaceHolder1_lblTitulo")
-        entidade = soup.find("span", id="ctl00_ContentPlaceHolder1_lblEntidade")
-        data = soup.find("span", id="ctl00_ContentPlaceHolder1_lblDataPublicacao")
+  return dataStr; // fallback
+}
 
-        if not titulo:
-            return None
+fetch('data.json')
+  .then(response => response.json())
+  .then(data => {
+    const container = document.getElementById('ofertas');
 
-        return {
-            "cod": cod,
-            "titulo": titulo.text.strip() if titulo else "",
-            "entidade": entidade.text.strip() if entidade else "",
-            "data": data.text.strip() if data else "",
-            "url": url
-        }
-
-    except:
-        return None
+    data.forEach(oferta => {
+      const div = document.createElement('div');
+      div.innerHTML = `
+        <h3>${oferta.titulo}</h3>
+        <p><strong>Entidade:</strong> ${oferta.entidade}</p>
+        <p><strong>Data:</strong> ${formatarData(oferta.data)}</p>
+        <a href="${oferta.url}" target="_blank">Ver oferta</a>
+        <hr>
+      `;
+      container.appendChild(div);
+    });
+  });
