@@ -20,14 +20,15 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Configurar DNS Público da Cloudflare
-      # Este comando força a máquina do GitHub a conseguir ler domínios .gov.pt
+    - name: Forçar IP do Estado Português no Sistema
+      # Este comando mapeia o domínio diretamente para o IP correto, ignorando o DNS avariado do GitHub
       run: |
-        sudo echo "nameserver 1.1.1.1" | sudo tee /etc/resolv.conf > /dev/null
+        echo "185.34.133.19 www.bep.gov.pt bep.gov.pt" | sudo tee -a /etc/hosts
 
-    - name: Descarregar XML da BEP via Domínio Real
+    - name: Descarregar XML da BEP
+      # Usamos obrigatoriamente o link oficial completo com o www. que mapeámos acima
       run: |
-        curl -s -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://bep.gov.pt" -o feed.xml
+        curl -s -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://bep.gov.pt" -o feed.xml
 
     - name: Executar o Scraper Python
       run: python gerar_data.py
