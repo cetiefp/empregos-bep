@@ -76,7 +76,7 @@ def main():
 
     print(f"Início em {cod}")
 
-    while len(ofertas) < TOTAL and tentativas < 200:
+    while len(ofertas) < TOTAL and tentativas < 100:
         oferta = get_oferta(cod)
 
         if oferta:
@@ -87,7 +87,7 @@ def main():
 
         cod -= 1
         tentativas += 1
-        time.sleep(1)
+        time.sleep(0.2)
 
     if ofertas:
         guardar_estado(max(o["cod"] for o in ofertas))
