@@ -1,87 +1,82 @@
+import os
+import json
+import re
 import requests
 from bs4 import BeautifulSoup
-import json
-import time
-import os
 
-BASE_URL = "https://www.bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta="
-TOTAL = 20
-ESTADO_FILE = "estado.json"
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "Accept-Language": "pt-PT,pt;q=0.9"
-}
-
-def carregar_estado():
-    if os.path.exists(ESTADO_FILE):
-        with open(ESTADO_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data.get("ultimo_cod", 147980)
-    return 147980
-
-def guardar_estado(cod):
-    with open(ESTADO_FILE, "w", encoding="utf-8") as f:
-        json.dump({"ultimo_cod": cod}, f)
-
-def get_oferta(cod):
-    url = BASE_URL + str(cod)
-
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=3)
-
-        if r.status_code != 200:
-            return None
-
-        html = r.text
-
-        if "Pesquisar Oferta" in html:
-            return None
-
-        soup = BeautifulSoup(html, "html.parser")
-
-        titulo_tag = soup.find("span", id="ctl00_ContentPlaceHolder1_lblDesignacao")
-        entidade_tag = soup.find("span", id="ctl00_ContentPlaceHolder1_lblOrganismo")
-        data_tag = soup.find("span", id="ctl00_ContentPlaceHolder1_lblDataPublicacao")
-
-        if not titulo_tag:
-            return None
-
-        titulo = titulo_tag.text.strip()
-
-        return {
-            "cod": cod,
-            "titulo": titulo,
-            "entidade": entidade_tag.text.strip() if entidade_tag else "",
-            "data": data_tag.text.strip() if data_tag else "",
-            "link": url
-        }
-
-    except Exception:
-        return None
-
-def main():
-    ultimo_cod = carregar_estado()
-
-    ofertas = []
-    cod = ultimo_cod + 30
+def extrair_ultimas_ofertas(quantidade=20):
+    # Definimos um ID alto de partida para fazer a contagem decrescente
+    id_atual = 148000 
+    ofertas_encontradas = []
     tentativas = 0
+    
+    print("A iniciar a recolha de ofertas na BEP...")
+    
+    # Executa até encontrar 20 ofertas válidas ou atingir o limite de segurança
+    while len(ofertas_encontradas) < quantidade and tentativas < 150:
+        url = f"https://bep.gov.pt{id_atual}"
+        try:
+            resposta = requests.get(url, timeout=10)
+            if resposta.status_code == 200 and "Código da Oferta" in resposta.text:
+                soup = BeautifulSoup(resposta.text, 'html.parser')
+                
+                # Extração do Código/Título da Oferta (Ex: OE2026...)
+                elem_codigo = soup.find(id="ctl00_FormId_lblCodigo")
+                titulo = elem_codigo.text.strip() if elem_codigo else f"Oferta BEP Código {id_atual}"
+                
+                # Extração do Organismo Emissor
+                elem_org = soup.find(id="ctl00_FormId_lblOrganismo")
+                organismo = elem_org.text.strip() if elem_org else "Administração Pública Portuguesa"
+                
+                # Extração da Caracterização/Descrição do Posto de Trabalho
+                elem_desc = soup.find(id="ctl00_FormId_lblCaracterizacao")
+                descricao = elem_desc.text.strip() if elem_desc else "Consulte os detalhes e requisitos completos no portal oficial da BEP."
 
-    while len(ofertas) < TOTAL and tentativas < 50:
-        oferta = get_oferta(cod)
-
-        if oferta:
-            ofertas.append(oferta)
-
-        cod -= 1
+                # Construção do bloco de dados estruturados (Schema.org / JobPosting) para a Google
+                dados_vaga = {
+                    "id": id_atual,
+                    "titulo": titulo,
+                    "url": url,
+                    "organismo": organismo,
+                    "descricao": descricao,
+                    "dados_estruturados": {
+                        "@context": "https://schema.org",
+                        "@type": "JobPosting",
+                        "title": titulo,
+                        "description": descricao,
+                        "datePosted": "2026-05-17",
+                        "validThrough": "2026-06-17",
+                        "employmentType": "FULL_TIME",
+                        "hiringOrganization": {
+                            "@type": "Organization",
+                            "name": organismo,
+                            "sameAs": "https://bep.gov.pt"
+                        },
+                        "jobLocation": {
+                            "@type": "Place",
+                            "address": {
+                                "@type": "PostalAddress",
+                                "addressCountry": "PT",
+                                "addressRegion": "Portugal"
+                            }
+                        }
+                    }
+                }
+                ofertas_encontradas.append(dados_vaga)
+                print(f"Sucesso: Oferta {id_atual} adicionada.")
+        except Exception as erro:
+            print(f"Erro ao processar o ID {id_atual}: {erro}")
+        
+        id_atual -= 1
         tentativas += 1
-        time.sleep(0.2)
-
-    if ofertas:
-        guardar_estado(max(o["cod"] for o in ofertas))
-
-    with open("data.json", "w", encoding="utf-8") as f:
-        json.dump(ofertas, f, ensure_ascii=False, indent=2)
+        
+    return ofertas_encontradas
 
 if __name__ == "__main__":
-    main()
+    lista_final = extrair_ultimas_ofertas(20)
+    
+    # Grava os resultados exatamente no ficheiro data.json esperado
+    with open("data.json", "w", encoding="utf-8") as f:
+        json.dump(lista_final, f, ensure_ascii=False, indent=4)
+        
+    print(f"Ficheiro data.json atualizado com {len(lista_final)} ofertas.")
