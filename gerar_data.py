@@ -3,56 +3,54 @@ from bs4 import BeautifulSoup
 import json
 import time
 
-BASE_URL = "https://www.bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta={}"
+BASE_URL = "https://www.bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta="
 
-# começa neste código (ajusta se quiseres)
-START_ID = 147969
-TOTAL = 200
+def obter_oferta(cod):
+    url = f"{BASE_URL}{cod}"
+    try:
+        r = requests.get(url, timeout=10)
 
-def extrair_dados(html):
-    soup = BeautifulSoup(html, "html.parser")
+        if r.status_code != 200:
+            return None
 
-    def get_text(label):
-        el = soup.find("span", string=label)
-        if el:
-            val = el.find_next("span")
-            if val:
-                return val.text.strip()
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        titulo = soup.find("span", id="ctl00_ContentPlaceHolder1_lblTitulo")
+        entidade = soup.find("span", id="ctl00_ContentPlaceHolder1_lblEntidade")
+
+        if not titulo:
+            return None
+
+        return {
+            "cod": cod,
+            "titulo": titulo.text.strip() if titulo else "",
+            "entidade": entidade.text.strip() if entidade else "",
+            "url": url
+        }
+
+    except:
         return None
 
-    titulo = soup.find("span", id="ctl00_ContentPlaceHolder1_lblTitulo")
-    entidade = soup.find("span", id="ctl00_ContentPlaceHolder1_lblEntidade")
 
-    return {
-        "titulo": titulo.text.strip() if titulo else None,
-        "entidade": entidade.text.strip() if entidade else None,
-    }
-
-def main():
+def obter_ultimas(n=20, start=148500):
     resultados = []
 
-    for cod in range(START_ID, START_ID - TOTAL, -1):
-        url = BASE_URL.format(cod)
+    cod = start
 
-        try:
-            r = requests.get(url, timeout=10)
-            if r.status_code == 200:
-                dados = extrair_dados(r.text)
-                dados["cod"] = cod
-                dados["url"] = url
+    while len(resultados) < n and cod > 0:
+        oferta = obter_oferta(cod)
 
-                # evitar páginas vazias
-                if dados["titulo"]:
-                    resultados.append(dados)
+        if oferta:
+            print(f"✔ Encontrado {cod}")
+            resultados.append(oferta)
 
-            time.sleep(1)  # evitar bloqueio
-        except Exception as e:
-            print(f"Erro no {cod}: {e}")
+        cod -= 1
+        time.sleep(0.5)  # evitar bloqueio
 
-    with open("data.json", "w", encoding="utf-8") as f:
-        json.dump(resultados, f, ensure_ascii=False, indent=2)
+    return resultados
 
-    print(f"Guardado com {len(resultados)} entradas.")
 
-if __name__ == "__main__":
-    main()
+dados = obter_ultimas()
+
+with open("data.json", "w", encoding="utf-8") as f:
+    json.dump(dados, f, ensure_ascii=False, indent=2)
