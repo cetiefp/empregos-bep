@@ -1,31 +1,61 @@
-function formatarData(dataStr) {
-  if (!dataStr) return '';
+import requests
+from bs4 import BeautifulSoup
+import json
+import time
 
-  // tenta converter formato português (dd-mm-yyyy)
-  const partes = dataStr.split(/[-\/]/);
+BASE_URL = "https://www.bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta="
 
-  if (partes.length === 3) {
-    const data = new Date(`${partes[2]}-${partes[1]}-${partes[0]}`);
-    return data.toLocaleDateString('pt-PT');
-  }
+# Começa num número recente (ajusta se necessário)
+START_ID = 147980  
 
-  return dataStr; // fallback
-}
+TOTAL = 20
 
-fetch('data.json')
-  .then(response => response.json())
-  .then(data => {
-    const container = document.getElementById('ofertas');
+def get_oferta(cod):
+    url = BASE_URL + str(cod)
 
-    data.forEach(oferta => {
-      const div = document.createElement('div');
-      div.innerHTML = `
-        <h3>${oferta.titulo}</h3>
-        <p><strong>Entidade:</strong> ${oferta.entidade}</p>
-        <p><strong>Data:</strong> ${formatarData(oferta.data)}</p>
-        <a href="${oferta.url}" target="_blank">Ver oferta</a>
-        <hr>
-      `;
-      container.appendChild(div);
-    });
-  });
+    try:
+        r = requests.get(url, timeout=10)
+        if r.status_code != 200:
+            return None
+
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        titulo = soup.find("span", {"id": "ctl00_ContentPlaceHolder1_lblDesignacao"} )
+        entidade = soup.find("span", {"id": "ctl00_ContentPlaceHolder1_lblOrganismo"})
+        data = soup.find("span", {"id": "ctl00_ContentPlaceHolder1_lblDataPublicacao"})
+
+        if not titulo:
+            return None
+
+        return {
+            "cod": cod,
+            "titulo": titulo.text.strip(),
+            "entidade": entidade.text.strip() if entidade else "",
+            "data": data.text.strip() if data else "",
+            "link": url
+        }
+
+    except:
+        return None
+
+
+def main():
+    ofertas = []
+    cod = START_ID
+
+    while len(ofertas) < TOTAL and cod > START_ID - 200:
+        print(f"A verificar {cod}")
+        oferta = get_oferta(cod)
+
+        if oferta:
+            ofertas.append(oferta)
+
+        cod -= 1
+        time.sleep(1)
+
+    with open("data.json", "w", encoding="utf-8") as f:
+        json.dump(ofertas, f, ensure_ascii=False, indent=2)
+
+
+if __name__ == "__main__":
+    main()
