@@ -31,5 +31,5 @@ jobs:
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@://github.com"
         git add data.json estado.json
-        git commit -m "Sistema: Atualização via tabela HTML principal (Máx 200)" || echo "Sem novidades"
+        git commit -m "Sistema: Sincronização segura via Arquivo Digital" || echo "Sem novidades"
         git push origin main
