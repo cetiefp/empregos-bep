@@ -2,8 +2,8 @@ name: Executar Scraper BEP Automático
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Atualiza de 6 em 6 horas de forma automática
-  workflow_dispatch:       # Cria um botão para poder executar manualmente a qualquer hora
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -12,25 +12,25 @@ jobs:
   recortar-e-publicar:
     runs-on: ubuntu-latest
     steps:
-    - name: Descarregar Código do Repositório
+    - name: Descarregar Código
       uses: actions/checkout@v4
 
-    - name: Configurar Ambiente Python
+    - name: Configurar Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
-    - name: Instalar Bibliotecas Requeridas
+    - name: Descarregar XML da BEP de forma direta
       run: |
-        pip install requests beautifulsoup4
+        curl -s -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://bep.gov.pt" -o feed.xml
 
-    - name: Executar o Scraper
+    - name: Executar o Scraper Python
       run: python gerar_data.py
 
-    - name: Atualizar Repositório com as Novas Ofertas
+    - name: Atualizar Repositório
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@://github.com"
-        git add data.json
-        git commit -m "Sistema: Atualização automática de dados da BEP" || echo "Sem novidades no portal para gravar."
+        git add data.json estado.json
+        git commit -m "Sistema: Atualização automática de dados da BEP" || echo "Sem novidades"
         git push origin main
