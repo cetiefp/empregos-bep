@@ -2,7 +2,7 @@ name: Atualizar dados BEP
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # de 30 em 30 minutos
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Clonar repo
+      - name: Clonar repositório
         uses: actions/checkout@v3
 
-      - name: Instalar Python
+      - name: Configurar Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
@@ -24,13 +24,13 @@ jobs:
       - name: Instalar dependências
         run: pip install requests beautifulsoup4
 
-      - name: Gerar dados
+      - name: Executar script
         run: python gerar_data.py
 
       - name: Commit e push
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add data.json
-          git commit -m "Atualizar dados BEP" || echo "Nada para atualizar"
+          git add data.json estado.json
+          git commit -m "Atualizar dados BEP" || echo "Sem alterações"
           git push
