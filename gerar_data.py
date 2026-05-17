@@ -3,15 +3,13 @@ import json
 import re
 import requests
 import xml.etree.ElementTree as ET
-import urllib.parse
 
 def extrair_vagas_rss():
-    # URL oficial que queremos ler
+    # URL oficial que queremos alcançar
     url_bep = "https://bep.gov.pt"
     
-    # Codificamos o URL para ser enviado através da API pública do AllOrigins (evita bloqueios de DNS/IP)
-    url_encoded = urllib.parse.quote_plus(url_bep)
-    url_proxy = f"https://allorigins.win{url_encoded}"
+    # URL do proxy AllOrigins configurado corretamente com a barra '/' após o 'get'
+    url_proxy = f"https://allorigins.win{url_bep}"
     
     ofertas_estruturadas = []
     
@@ -21,11 +19,11 @@ def extrair_vagas_rss():
         
         if resposta.status_code == 200:
             dados_json = resposta.json()
-            # O conteúdo original do XML vem dentro da propriedade 'contents'
+            # Extrai o conteúdo em texto do XML de dentro do JSON
             xml_texto = dados_json.get("contents", "")
             
             if not xml_texto:
-                print("Erro: Resposta recebida mas sem conteúdo no XML.")
+                print("Erro: Resposta vazia recebida do proxy.")
                 return []
                 
             # Processa a estrutura de elementos do XML
@@ -50,10 +48,10 @@ def extrair_vagas_rss():
                 
                 # Divide a string para separar o código interno do nome da entidade pública
                 partes = titulo_completo.split(" - ")
-                titulo_vaga = partes[0].strip()
+                titulo_vaga = partes[0].strip() if len(partes) > 0 else titulo_completo
                 organismo = partes[1].strip() if len(partes) > 1 else "Administração Pública Portuguesa"
                 
-                # ESTRUTURA REQUISITADA PARA SEO (Google JobPosting)
+                # DADOS ESTRUTURADOS PARA SEO (Google JobPosting)
                 dados_vaga = {
                     "id": id_vaga,
                     "titulo": titulo_vaga,
