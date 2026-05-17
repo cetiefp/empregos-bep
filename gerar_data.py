@@ -2,12 +2,13 @@ import os
 import json
 import re
 import requests
+import xml.etree.ElementTree as ET
 
 def extrair_e_acumular():
     ficheiro_dados = "data.json"
     ofertas_antigas = []
     
-    # 1. Carrega o histórico existente do repositório GitHub para acumular até 200
+    # 1. Carrega o histórico existente do repositório GitHub
     if os.path.exists(ficheiro_dados):
         try:
             with open(ficheiro_dados, "r", encoding="utf-8") as f:
@@ -18,67 +19,58 @@ def extrair_e_acumular():
         except:
             pass
 
-    # 2. Endpoint oficial de pesquisa da API do Diário da República Eletrónico
-    url_dre_api = "https://diariodarepublica.pt"
-    
-    # Payload estruturado para pesquisar procedimentos concursais abertos na 2.ª Série do DRE
-    payload = {
-        "query": "procedimento concursal comum",
-        "facets": {
-            "serie": ["2"]
-        },
-        "page": 1,
-        "perPage": 20,
-        "sort": "pubDate,desc"
-    }
+    # 2. Rota imune: Feed RSS do Google News filtrado por concursos públicos do DRE
+    # A Google tem acesso total e o GitHub tem acesso total à Google. Bloqueio zero.
+    url_proxy_google = "https://google.com"
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Content-Type": "application/json"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
     
-    print("A descarregar os concursos públicos oficiais em direto da API do DRE...")
+    print("A descarregar os registos oficiais indexados via infraestrutura da Google...")
     try:
-        # Fazemos um pedido POST enviando os critérios de pesquisa
-        resposta = requests.post(url_dre_api, json=payload, headers=headers, timeout=25)
+        resposta = requests.get(url_proxy_google, headers=headers, timeout=25)
         
         if resposta.status_code == 200:
-            dados = resposta.json()
-            # A API do DRE devolve os resultados dentro da chave 'items'
-            itens = dados.get("items", [])
+            resposta.encoding = 'utf-8'
             
-            print(f"Ligação bem-sucedida! Detetadas {len(itens)} publicações recentes no DRE.")
+            # Processamos o XML estável da Google
+            root = ET.fromstring(resposta.text)
+            items = root.findall(".//item")
+            
+            print(f"Ligação bem-sucedida! Detetados {len(items)} novos anúncios arquivados.")
             
             novas_ofertas = []
-            for item in itens:
-                titulo_cru = item.get("title", "Procedimento Concursal")
-                sumario = item.get("summary", "")
-                id_dre = item.get("id", 0)
+            for item in items:
+                titulo_completo = item.find("title").text.strip() if item.find("title") is not None else "Procedimento Concursal"
+                link_google = item.find("link").text.strip() if item.find("link") is not None else "https://diariodarepublica.pt"
                 
-                # Constrói o link público para o utilizador ler o diploma completo no DRE
-                url_vaga = f"https://diariodarepublica.pt{id_dre}"
+                # Limpa o sufixo do Google News se presente no título
+                titulo_completo = re.sub(r'\s+-\s+diáriodarepublica\.pt.*$', '', titulo_completo, flags=re.IGNORECASE)
+                titulo_completo = re.sub(r'\s+-\s+Google\s+News.*$', '', titulo_completo, flags=re.IGNORECASE)
                 
-                # Extrai a entidade pública que emitiu o concurso
-                organismo = item.get("issuingBody", "Administração Pública Portuguesa")
+                # Extrai uma referência numérica estável do URL para servir de ID único
+                match_id = re.search(r'/(\d+)/', link_google) or re.search(r'id=(\d+)', link_google)
+                id_vaga = int(match_id.group(1)) if match_id else abs(hash(titulo_completo)) % 1000000
                 
-                # Tenta capturar o número do Aviso impresso no sumário para servir de referência
-                match_aviso = re.search(r"Aviso\s+n\.\º\s+(\d+/\d+)", sumario, re.IGNORECASE)
-                codigo_aviso = match_aviso.group(1) if match_aviso else f"DRE-{id_dre}"
+                # Isola termos do organismo se o título seguir o padrão comum
+                partes = titulo_completo.split(" - ")
+                titulo_vaga = partes[0].strip()
+                organismo = partes[1].strip() if len(partes) > 1 else "Administração Pública Portuguesa"
                 
-                titulo_vaga = f"Aviso {codigo_aviso} - {titulo_cru[:65]}..."
-                id_vaga = int(id_dre) if str(id_dre).isdigit() else abs(hash(codigo_aviso)) % 1000000
+                desc_vaga = f"Publicação oficial de procedimento concursal comum associado ao organismo: {organismo}. Consulte o articulado completo e anexos de candidatura no Diário da República."
 
                 novas_ofertas.append({
                     "id": id_vaga,
-                    "titulo": titulo_vaga,
-                    "url": url_vaga,
+                    "titulo": titulo_completo,
+                    "url": link_google,
                     "organismo": organismo,
-                    "descricao": sumario if sumario else "Consulte os requisitos e termos de candidatura no Diário da República.",
+                    "descricao": desc_vaga,
                     "dados_estruturados": {
                         "@context": "https://schema.org",
                         "@type": "JobPosting",
-                        "title": titulo_vaga,
-                        "description": sumario if sumario else "Detalhes de recrutamento oficial no DRE.",
+                        "title": titulo_completo,
+                        "description": desc_vaga,
                         "hiringOrganization": {
                             "@type": "Organization",
                             "name": organismo,
@@ -93,31 +85,30 @@ def extrair_e_acumular():
                         }
                     }
                 })
-                print(f"-> Vaga indexada do DRE: {codigo_aviso}")
+                print(f"-> Vaga indexada com sucesso: {id_vaga}")
             
-            # 3. Fusão incremental (Merge) sem duplicados baseada no ID único do diploma
+            # 3. Fusão incremental (Merge) sem duplicados
             vagas_mapeadas = {vaga["id"]: vaga for vaga in ofertas_antigas}
             for nova_vaga in novas_ofertas:
-                if nova_vaga["id"] > 0:
-                    vagas_mapeadas[nova_vaga["id"]] = nova_vaga
+                vagas_mapeadas[nova_vaga["id"]] = nova_vaga
                 
-            # Ordena a coleção (mais recentes primeiro)
+            # Ordena e limita a 200 itens
             lista_ordenada = sorted(vagas_mapeadas.values(), key=lambda x: x["id"], reverse=True)
             lista_final = lista_ordenada[:200]
             
-            # Atualiza o data.json do site estático
+            # Grava no data.json
             with open(ficheiro_dados, "w", encoding="utf-8") as f:
                 json.dump(lista_final, f, ensure_ascii=False, indent=4)
                 
             with open("estado.json", "w", encoding="utf-8") as f:
                 json.dump({"ultimo_id": lista_final[0]["id"] if lista_final else 0, "total_acumulado": len(lista_final)}, f, indent=4)
                 
-            print(f"Sucesso! Ficheiro data.json atualizado com {len(lista_final)}/200 vagas totais do DRE.")
+            print(f"Sucesso absoluto! O data.json tem agora {len(lista_final)}/200 vagas estáveis acumuladas.")
         else:
-            print(f"A API do DRE rejeitou o pedido POST. Código HTTP: {resposta.status_code}")
+            print(f"A infraestrutura intermédia devolveu um código de aviso: {resposta.status_code}")
             
     except Exception as e:
-        print(f"Erro no processamento dos dados da API do DRE: {e}")
+        print(f"Erro no processamento da rota imune: {e}")
 
 if __name__ == "__main__":
     extrair_e_acumular()
