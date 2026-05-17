@@ -6,14 +6,14 @@ import os
 
 BASE_URL = "https://www.bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta="
 TOTAL = 20
-
 ESTADO_FILE = "estado.json"
 
 
 def carregar_estado():
     if os.path.exists(ESTADO_FILE):
         with open(ESTADO_FILE, "r") as f:
-            return json.load(f)["ultimo_cod"]
+            data = json.load(f)
+            return data.get("ultimo_cod", 147980)
     return 147980
 
 
@@ -47,7 +47,7 @@ def get_oferta(cod):
             "link": url
         }
 
-    except:
+    except Exception:
         return None
 
 
@@ -55,14 +55,12 @@ def main():
     ultimo_cod = carregar_estado()
 
     ofertas = []
-    cod = ultimo_cod
+    cod = ultimo_cod + 50  # tenta apanhar novos acima
+    tentativas = 0
 
     print(f"Início em {cod}")
 
-    tentativas = 0
-
-    # sobe até encontrar 20 novas ou parar
-    while len(ofertas) < TOTAL and tentativas < 100:
+    while len(ofertas) < TOTAL and tentativas < 200:
         oferta = get_oferta(cod)
 
         if oferta:
@@ -85,3 +83,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+``
