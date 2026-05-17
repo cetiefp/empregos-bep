@@ -20,10 +20,14 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Descarregar XML da BEP via IP Direto
+    - name: Configurar DNS Público da Cloudflare
+      # Este comando força a máquina do GitHub a conseguir ler domínios .gov.pt
       run: |
-        # Usamos o IP público do servidor da BEP com a flag -k para aceitar o certificado SSL associado ao domínio
-        curl -s -L -k -H "Host: www.bep.gov.pt" -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://185.34.133" -o feed.xml
+        sudo echo "nameserver 1.1.1.1" | sudo tee /etc/resolv.conf > /dev/null
+
+    - name: Descarregar XML da BEP via Domínio Real
+      run: |
+        curl -s -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://bep.gov.pt" -o feed.xml
 
     - name: Executar o Scraper Python
       run: python gerar_data.py
