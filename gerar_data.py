@@ -1,24 +1,7 @@
 import os
 import json
 import re
-import time
 import requests
-
-def forcar_gravacao_no_arquivo(url_alvo):
-    print(f"A ordenar ao Internet Archive que grave uma cópia fresca de: {url_alvo}")
-    url_save = f"https://archive.org{url_alvo}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
-    try:
-        # Envia o pedido de gravação imediata
-        resposta = requests.get(url_save, headers=headers, timeout=15)
-        print(f"Pedido enviado. Estado do arquivo: {resposta.status_code}")
-        # Aguarda 5 segundos para dar tempo aos servidores do Archive de processarem o site da BEP
-        print("A aguardar 5 segundos para estabilização do snapshot...")
-        time.sleep(5)
-    except Exception as e:
-        print(f"Aviso na ordem de gravação: {e}")
 
 def extrair_e_acumular():
     ficheiro_dados = "data.json"
@@ -37,10 +20,15 @@ def extrair_e_acumular():
 
     url_bep_rss = "https://bep.gov.pt"
     
-    # FORÇA O ARQUIVO A GRAVAR O FEED AGORA
-    forcar_gravacao_no_arquivo(url_bep_rss)
-    
-    # 2. Pergunta ao arquivo qual é o link da cópia mais recente (que acabámos de forçar)
+    # 2. Força o Internet Archive a registar uma cópia em tempo real (Sem erros de concatenação)
+    url_gravar = f"https://archive.org{url_bep_rss}"
+    print(f"A ordenar ao Internet Archive que grave uma cópia fresca da BEP...")
+    try:
+        requests.get(url_gravar, timeout=15)
+    except Exception as e:
+        print(f"Aviso na ordem de gravação (ignorado): {e}")
+
+    # 3. Consulta a API para obter a última captura guardada
     url_api_archive = f"https://archive.org{url_bep_rss}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -53,21 +41,21 @@ def extrair_e_acumular():
             snapshot = dados_api.get("archived_snapshots", {}).get("closest", {})
             
             if not snapshot or not snapshot.get("url"):
-                print("A usar link de contingência direta baseado na data atual...")
-                url_leitura = f"https://archive.org{url_bep_rss}"
+                # URL de contingência direta se a API falhar
+                url_alvo = f"https://archive.org{url_bep_rss}"
             else:
-                # O modificador 'im_' garante o XML limpo e sem barras de ferramentas do Archive
-                url_leitura = snapshot.get("url").replace("/web/", "/web/20260000000000im_/")
+                # O modificador 'im_' garante que o Archive envia o XML cru sem HTML decorativo
+                url_alvo = snapshot.get("url").replace("/web/", "/web/20260000000000im_/")
                 
-            print(f"A descarregar o XML fresco guardado em: {url_leitura}")
-            resposta_xml = requests.get(url_leitura, headers=headers, timeout=25)
+            print(f"A descarregar o Feed RSS imune a bloqueios a partir de: {url_alvo}")
+            resposta_xml = requests.get(url_alvo, headers=headers, timeout=25)
             
             if resposta_xml.status_code == 200:
                 texto_cru = resposta_xml.text
                 
-                # Isola os blocos <item> textualmente
+                # Isola os blocos <item> textualmente para contornar falhas de sintaxe da BEP
                 blocos_item = re.findall(r'<item>(.*?)</item>', texto_cru, re.DOTALL | re.IGNORECASE)
-                print(f"Sucesso! Detetados {len(blocos_item)} anúncios novos gravados no arquivo.")
+                print(f"Sucesso! Foram detetados {len(blocos_item)} anúncios de emprego no arquivo histórico.")
                 
                 novas_ofertas = []
                 for bloco in blocos_item:
@@ -83,11 +71,11 @@ def extrair_e_acumular():
                     link_original = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', link_original, flags=re.DOTALL)
                     descricao_completa = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', descricao_completa, flags=re.DOTALL)
                     
-                    # Limpa o URL da vaga de quaisquer prefixos do web.archive
+                    # Limpa prefixos do Wayback se ficarem colados ao link original
                     link_original = re.sub(r'^https:\/\/web\.archive\.org\/web\/\d+im_\/', '', link_original)
                     
                     if link_original and "www." not in link_original:
-                        link_original = link_original.replace("https://bep.gov.pt", "https://bep.gov.pt")
+                        link_original = link_original.replace("https://bep.gov.pt", "https://www.bep.gov.pt")
                     
                     match_id = re.search(r"CodOferta=(\d+)", link_original)
                     id_vaga = int(match_id.group(1)) if match_id else abs(hash(titulo_completo)) % 1000000
@@ -99,18 +87,18 @@ def extrair_e_acumular():
                     novas_ofertas.append({
                         "id": id_vaga,
                         "titulo": titulo_vaga,
-                        "url": link_original if "bep.gov.pt" in link_original else f"https://bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta={id_vaga}",
+                        "url": link_original if "bep.gov.pt" in link_original else f"https://bep.gov.pt{id_vaga}",
                         "organismo": organismo,
                         "descricao": descricao_completa if descricao_completa else f"Procedimento concursal para {titulo_vaga}.",
                         "dados_estruturados": {
                             "@context": "https://schema.org",
                             "@type": "JobPosting",
                             "title": titulo_vaga,
-                            "description": descricao_completa,
+                            "description": descricao_completa if descricao_completa else "Consulte os termos no portal oficial.",
                             "hiringOrganization": {
                                 "@type": "Organization",
                                 "name": organismo,
-                                "sameAs": "https://bep.gov.pt"
+                                "sameAs": "https://www.bep.gov.pt"
                             },
                             "jobLocation": {
                                 "@type": "Place",
@@ -121,9 +109,9 @@ def extrair_e_acumular():
                             }
                         }
                     })
-                    print(f"-> Indexada: ID {id_vaga} - {titulo_vaga}")
+                    print(f"-> Vaga extraída: ID {id_vaga} - {titulo_vaga}")
                 
-                # 3. Fusão incremental (Merge) sem duplicados
+                # Fusão incremental sem duplicar chaves
                 vagas_mapeadas = {vaga["id"]: vaga for vaga in ofertas_antigas}
                 for nova_vaga in novas_ofertas:
                     vagas_mapeadas[nova_vaga["id"]] = nova_vaga
@@ -137,11 +125,11 @@ def extrair_e_acumular():
                 with open("estado.json", "w", encoding="utf-8") as f:
                     json.dump({"ultimo_id": lista_final[0]["id"] if lista_final else 0, "total_acumulado": len(lista_final)}, f, indent=4)
                     
-                print(f"Sucesso absoluto! Base de dados atualizada: {len(lista_final)}/200 vagas totais.")
+                print(f"Sucesso! Ficheiro data.json sincronizado com {len(lista_final)}/200 vagas totais.")
             else:
-                print(f"O arquivo devolveu um erro no XML: {resposta_xml.status_code}")
+                print(f"Erro ao descarregar do arquivo. Estado: {resposta_xml.status_code}")
         else:
-            print(f"A API de consulta do arquivo falhou: {resposta_api.status_code}")
+            print(f"A API do Wayback Machine falhou. Estado: {resposta_api.status_code}")
     except Exception as e:
         print(f"Falha no processamento geral: {e}")
 
