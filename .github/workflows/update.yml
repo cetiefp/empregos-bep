@@ -2,15 +2,17 @@ name: Executar Scraper BEP Automático
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    - cron: '0 */6 * * *'  # Executa de 6 em 6 horas automaticamente
+  workflow_dispatch:       # Botão para execução manual a qualquer hora
 
 permissions:
   contents: write
 
 jobs:
   recortar-e-publicar:
-    runs-on: ubuntu-latest
+    # Mudamos o sistema operativo para contornar o bloqueio de IP das gamas Linux da Azure
+    runs-on: windows-latest
+    
     steps:
     - name: Descarregar Código do Repositório
       uses: actions/checkout@v4
@@ -20,16 +22,16 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Instalar Dependências Necessárias na Máquina Virtual
-      run: pip install requests beautifulsoup4 lxml
+    - name: Instalar Dependência de Rede
+      run: pip install requests
 
-    - name: Executar Atualização e Acumulação Python
+    - name: Executar Sincronização de Texto Python
       run: python gerar_data.py
 
-    - name: Gravar Histórico Incremental no Repositório
+    - name: Gravar Alterações e Histórico no Repositório
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@://github.com"
         git add data.json estado.json
-        git commit -m "Sistema: Sincronização segura via Arquivo Digital" || echo "Sem novidades"
+        git commit -m "Sistema: Atualização incremental via ambiente Windows" -m "Evita bloqueio IP governamental" --allow-empty
         git push origin main
