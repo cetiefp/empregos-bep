@@ -9,106 +9,6 @@ TOTAL = 20
 ESTADO_FILE = "estado.json"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
-}
-
-
-def carregar_estado():
-    if os.path.exists(ESTADO_FILE):
-        with open(ESTADO_FILE, "r") as f:
-            return json.load(f).get("ultimo_cod", 147980)
-    return 147980
-
-
-def guardar_estado(cod):
-    with open(ESTADO_FILE, "w") as f:
-        json.dump({"ultimo_cod": cod}, f)
-
-
-def get_oferta(cod):
-    url = BASE_URL + str(cod)
-
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=1)
-
-        if r.status_code != 200:
-            return None
-
-        html = r.text
-
-        # 🔴 bloquear falsos positivos
-        if "Pesquisar Oferta" in html or "Oferta_Pesquisa" in html:
-            return None
-
-        soup = BeautifulSoup(html, "html.parser")
-
-        titulo_tag = soup.find("span", id="ctl00_ContentPlaceHolder1_lblDesignacao")
-
-        if not titulo_tag:
-            return None
-
-        titulo = titulo_tag.text.strip()
-
-        if not titulo or "Pesquisar" in titulo:
-            return None
-
-        entidade_tag = soup.find("span", id="ctl00_ContentPlaceHolder1_lblOrganismo")
-        data_tag = soup.find("span", id="ctl00_ContentPlaceHolder1_lblDataPublicacao")
-
-        return {
-            "cod": cod,
-            "titulo": titulo,
-            "entidade": entidade_tag.text.strip() if entidade_tag else "",
-            "data": data_tag.text.strip() if data_tag else "",
-            "link": url
-        }
-
-    except Exception:
-        return None
-
-
-def main():
-    ultimo_cod = carregar_estado()
-
-    ofertas = []
-    cod = ultimo_cod + 30
-    tentativas = 0
-
-    print(f"Início em {cod}")
-
-    while len(ofertas) < TOTAL and tentativas < 10:
-        oferta = get_oferta(cod)
-
-        if oferta:
-            print(f"✔ {cod}")
-            ofertas.append(oferta)
-        else:
-            print(f"✖ {cod}")
-
-        cod -= 1
-        tentativas += 1
-        time.sleep(0.2)
-
-    if ofertas:
-        guardar_estado(max(o["cod"] for o in ofertas))
-
-    with open("data.json", "w", encoding="utf-8") as f:
-        json.dump(ofertas, f, ensure_ascii=False, indent=2)
-
-
-if __name__ == "__main__":
-    main()
-import requests
-from bs4 import BeautifulSoup
-import json
-import time
-import os
-
-BASE_URL = "https://www.bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta="
-TOTAL = 20
-ESTADO_FILE = "estado.json"
-
-HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     "Accept-Language": "pt-PT,pt;q=0.9"
 }
@@ -116,13 +16,13 @@ HEADERS = {
 
 def carregar_estado():
     if os.path.exists(ESTADO_FILE):
-        with open(ESTADO_FILE, "r") as f:
+        with open(ESTADO_FILE, "r", encoding="utf-8") as f:
             return json.load(f).get("ultimo_cod", 147980)
     return 147980
 
 
 def guardar_estado(cod):
-    with open(ESTADO_FILE, "w") as f:
+    with open(ESTADO_FILE, "w", encoding="utf-8") as f:
         json.dump({"ultimo_cod": cod}, f)
 
 
@@ -133,3 +33,13 @@ def get_oferta(cod):
         r = requests.get(url, headers=HEADERS, timeout=3)
 
         if r.status_code != 200:
+            return None
+
+        html = r.text
+
+        if "Pesquisar Oferta" in html or "Oferta_Pesquisa" in html:
+            return None
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        titulo_tag = soup.find("span", id="ctl00_ContentPlaceHolder1_lblDesignacao")
