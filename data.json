@@ -1,1 +1,16 @@
-
+[
+  {
+    "titulo": "Técnico Informática",
+    "entidade": "Câmara Municipal de Lisboa",
+    "local": "Lisboa",
+    "prazo": "2026-06-01",
+    "link": "https://exemplo.pt"
+  },
+  {
+    "titulo": "Assistente Administrativo",
+    "entidade": "Hospital São João",
+    "local": "Porto",
+    "prazo": "2026-05-25",
+    "link": "https://exemplo2.pt"
+  }
+]
