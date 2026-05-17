@@ -1,36 +1,36 @@
-name: Atualizar dados BEP
+name: Executar Scraper BEP Automático
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
-  workflow_dispatch:
+    - cron: '0 */6 * * *'  # Atualiza de 6 em 6 horas de forma automática
+  workflow_dispatch:       # Cria um botão para poder executar manualmente a qualquer hora
 
 permissions:
   contents: write
 
 jobs:
-  update:
+  recortar-e-publicar:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Clonar repositório
-        uses: actions/checkout@v3
+    - name: Descarregar Código do Repositório
+      uses: actions/checkout@v4
 
-      - name: Configurar Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
+    - name: Configurar Ambiente Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
 
-      - name: Instalar dependências
-        run: pip install requests beautifulsoup4
+    - name: Instalar Bibliotecas Requeridas
+      run: |
+        pip install requests beautifulsoup4
 
-      - name: Executar script
-        run: python gerar_data.py
+    - name: Executar o Scraper
+      run: python gerar_data.py
 
-      - name: Commit e push
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add data.json estado.json
-          git commit -m "Atualizar dados BEP" || echo "Sem alterações"
-          git push
+    - name: Atualizar Repositório com as Novas Ofertas
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@://github.com"
+        git add data.json
+        git commit -m "Sistema: Atualização automática de dados da BEP" || echo "Sem novidades no portal para gravar."
+        git push origin main
