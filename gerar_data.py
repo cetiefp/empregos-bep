@@ -12,8 +12,7 @@ ESTADO_FILE = "estado.json"
 def carregar_estado():
     if os.path.exists(ESTADO_FILE):
         with open(ESTADO_FILE, "r") as f:
-            data = json.load(f)
-            return data.get("ultimo_cod", 147980)
+            return json.load(f).get("ultimo_cod", 147980)
     return 147980
 
 
@@ -27,23 +26,43 @@ def get_oferta(cod):
 
     try:
         r = requests.get(url, timeout=10)
-        if r.status_code != 200:
+
+        # 🔴 Proteção: páginas inválidas
+        if "Pesquisar Oferta" in r.text:
             return None
 
         soup = BeautifulSoup(r.text, "html.parser")
 
-        titulo = soup.find("span", {"id": "ctl00_ContentPlaceHolder1_lblDesignacao"})
-        entidade = soup.find("span", {"id": "ctl00_ContentPlaceHolder1_lblOrganismo"})
-        data = soup.find("span", {"id": "ctl00_ContentPlaceHolder1_lblDataPublicacao"})
+        spans = soup.find_all("span")
 
-        if not titulo:
+        if len(spans) < 10:
+            return None
+
+        titulo = None
+        entidade = None
+        data = None
+
+        for s in spans:
+            texto = s.text.strip()
+
+            if not titulo and len(texto) > 10:
+                titulo = texto
+
+            if "Município" in texto or "Instituto" in texto or "Serviço" in texto:
+                entidade = texto
+
+            if "/" in texto and len(texto) <= 10:
+                data = texto
+
+        # 🔴 validação forte
+        if not titulo or "Pesquisar" in titulo:
             return None
 
         return {
             "cod": cod,
-            "titulo": titulo.text.strip(),
-            "entidade": entidade.text.strip() if entidade else "",
-            "data": data.text.strip() if data else "",
+            "titulo": titulo,
+            "entidade": entidade or "",
+            "data": data or "",
             "link": url
         }
 
@@ -55,32 +74,9 @@ def main():
     ultimo_cod = carregar_estado()
 
     ofertas = []
-    cod = ultimo_cod + 50  # tenta apanhar novos acima
+    cod = ultimo_cod + 50
     tentativas = 0
 
-    print(f"Início em {cod}")
+    while len(ofertas) < TOTAL and tentativas < 300:
+        print(f"A testar {cod}")
 
-    while len(ofertas) < TOTAL and tentativas < 200:
-        oferta = get_oferta(cod)
-
-        if oferta:
-            ofertas.append(oferta)
-            print(f"✔ encontrada {cod}")
-        else:
-            print(f"✖ sem oferta {cod}")
-
-        cod -= 1
-        tentativas += 1
-        time.sleep(1)
-
-    if ofertas:
-        novo_max = max(o["cod"] for o in ofertas)
-        guardar_estado(novo_max)
-
-    with open("data.json", "w", encoding="utf-8") as f:
-        json.dump(ofertas, f, ensure_ascii=False, indent=2)
-
-
-if __name__ == "__main__":
-    main()
-``
