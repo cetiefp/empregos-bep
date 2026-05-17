@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 
 def processar_feed_local():
     ofertas_estruturadas = []
-    print("A processar o ficheiro feed.xml...")
+    print("A ler o ficheiro local feed.xml...")
     
     try:
         tree = ET.parse("feed.xml")
@@ -25,10 +25,10 @@ def processar_feed_local():
             id_vaga = int(match_id.group(1)) if match_id else 0
             
             partes = titulo_completo.split(" - ")
-            titulo_vaga = partes[0].strip() if len(partes) > 0 else titulo_completo
-            organismo = partes[1].strip() if len(partes) > 1 else "Administração Pública Portuguesa"
+            titulo_vaga = partes.strip() if len(partes) > 0 else titulo_completo
+            organismo = partes.strip() if len(partes) > 1 else "Administração Pública Portuguesa"
             
-            # DADOS ESTRUTURADOS MANTIDOS PARA O GOOGLE JOBPOSTING
+            # Dados estruturados JobPosting preservados para a Google
             dados_vaga = {
                 "id": id_vaga,
                 "titulo": titulo_vaga,
@@ -57,7 +57,7 @@ def processar_feed_local():
             ofertas_estruturadas.append(dados_vaga)
             
         if ofertas_estruturadas:
-            id_topo = ofertas_estruturadas[0]["id"]
+            id_topo = ofertas_estruturadas["id"]
             with open("estado.json", "w", encoding="utf-8") as f:
                 json.dump({"ultimo_id": id_topo}, f, indent=4)
                 
@@ -70,4 +70,4 @@ if __name__ == "__main__":
     lista_final = processar_feed_local()
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(lista_final, f, ensure_ascii=False, indent=4)
-    print(f"Concluído. {len(lista_final)} vagas guardadas.")
+    print("Concluído.")
