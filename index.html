@@ -1,16 +1,63 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-  <meta charset="UTF-8">
-  <title>Empregos BEP</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ofertas de Emprego Público — BEP</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.5; }
+        h1 { border-bottom: 2px solid #0056b3; padding-bottom: 12px; color: #0056b3; }
+        .vaga-card { background: #fdfdfd; border: 1px solid #e1e4e8; padding: 20px; margin-bottom: 20px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .vaga-titulo { margin-top: 0; font-size: 1.25em; color: #0366d6; }
+        .vaga-org { font-weight: 600; color: #586069; font-size: 0.9em; margin-bottom: 10px; }
+        .vaga-desc { color: #24292e; font-size: 0.95em; }
+        .btn-link { display: inline-block; background-color: #2ea44f; color: white; padding: 7px 14px; text-decoration: none; border-radius: 6px; font-weight: 500; font-size: 0.85em; margin-top: 10px; }
+        .btn-link:hover { background-color: #2c974b; }
+        footer { margin-top: 60px; text-align: center; font-size: 0.8em; color: #6a737d; border-top: 1px solid #e1e4e8; padding-top: 20px; }
+    </style>
 </head>
 <body>
 
-  <h1>Últimas ofertas BEP</h1>
+    <h1>Últimas 20 Ofertas de Emprego Público (BEP)</h1>
+    <p>Índice estático otimizado para motores de busca. Atualizado automaticamente.</p>
+    
+    <div id="lista-vagas">A carregar os dados das ofertas vigentes...</div>
 
-  <div id="conteudo">A carregar...</div>
+    <footer>
+        <p>Projeto em código aberto alojado em <a href="https://github.com">cetiefp/empregos-bep</a></p>
+    </footer>
 
-  <script src="script.js"></script>
+    <script>
+        // Carrega o ficheiro gerado pelo script em Python
+        fetch('data.json')
+            .then(res => res.json())
+            .then(vagas => {
+                const contentor = document.getElementById('lista-vagas');
+                contentor.innerHTML = ''; 
 
+                vagas.forEach(vaga => {
+                    // 1. Injetar Dados Estruturados (JSON-LD) no cabeçalho para indexação SEO da Google
+                    const scriptSEO = document.createElement('script');
+                    scriptSEO.type = 'application/ld+json';
+                    scriptSEO.text = JSON.stringify(vaga.dados_estruturados);
+                    document.head.appendChild(scriptSEO);
+
+                    // 2. Construir o bloco visual para o utilizador humano
+                    const elementoCard = document.createElement('div');
+                    elementoCard.className = 'vaga-card';
+                    elementoCard.innerHTML = `
+                        <h2 class="vaga-titulo">${vaga.titulo}</h2>
+                        <div class="vaga-org">🏢 Organismo: ${vaga.organismo}</div>
+                        <p class="vaga-desc">${vaga.descricao}</p>
+                        <a href="${vaga.url}" target="_blank" rel="noopener" class="btn-link">Candidatar-se no portal BEP ↗</a>
+                    `;
+                    contentor.appendChild(elementoCard);
+                });
+            })
+            .catch(err => {
+                document.getElementById('lista-vagas').innerHTML = 'Ocorreu um erro ao processar os dados das ofertas.';
+                console.error(err);
+            });
+    </script>
 </body>
 </html>
