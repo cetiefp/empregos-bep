@@ -18,10 +18,8 @@ def processar_feed_local():
             link_original = item.find("link").text.strip() if item.find("link") is not None else ""
             descricao_completa = item.find("description").text.strip() if item.find("description") is not None else ""
             
-            # Reconverte o IP ou o domínio raiz para o link público correto com www para o utilizador clicar
-            if link_original:
+            if link_original and "www." not in link_original:
                 link_original = link_original.replace("https://bep.gov.pt", "https://www.bep.gov.pt")
-                link_original = link_original.replace("https://185.34.133.19", "https://www.bep.gov.pt")
             
             match_id = re.search(r"CodOferta=(\d+)", link_original)
             id_vaga = int(match_id.group(1)) if match_id else 0
@@ -30,6 +28,7 @@ def processar_feed_local():
             titulo_vaga = partes[0].strip() if len(partes) > 0 else titulo_completo
             organismo = partes[1].strip() if len(partes) > 1 else "Administração Pública Portuguesa"
             
+            # DADOS ESTRUTURADOS MANTIDOS PARA O GOOGLE JOBPOSTING
             dados_vaga = {
                 "id": id_vaga,
                 "titulo": titulo_vaga,
