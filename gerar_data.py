@@ -8,6 +8,10 @@ BASE_URL = "https://www.bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta="
 TOTAL = 20
 ESTADO_FILE = "estado.json"
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
+}
+
 
 def carregar_estado():
     if os.path.exists(ESTADO_FILE):
@@ -25,44 +29,37 @@ def get_oferta(cod):
     url = BASE_URL + str(cod)
 
     try:
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, headers=HEADERS, timeout=10)
 
-        # 🔴 Proteção: páginas inválidas
-        if "Pesquisar Oferta" in r.text:
+        if r.status_code != 200:
             return None
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        html = r.text
 
-        spans = soup.find_all("span")
-
-        if len(spans) < 10:
+        # 🔴 bloquear falsos positivos
+        if "Pesquisar Oferta" in html or "Oferta_Pesquisa" in html:
             return None
 
-        titulo = None
-        entidade = None
-        data = None
+        soup = BeautifulSoup(html, "html.parser")
 
-        for s in spans:
-            texto = s.text.strip()
+        titulo_tag = soup.find("span", id="ctl00_ContentPlaceHolder1_lblDesignacao")
 
-            if not titulo and len(texto) > 10:
-                titulo = texto
+        if not titulo_tag:
+            return None
 
-            if "Município" in texto or "Instituto" in texto or "Serviço" in texto:
-                entidade = texto
+        titulo = titulo_tag.text.strip()
 
-            if "/" in texto and len(texto) <= 10:
-                data = texto
-
-        # 🔴 validação forte
         if not titulo or "Pesquisar" in titulo:
             return None
+
+        entidade_tag = soup.find("span", id="ctl00_ContentPlaceHolder1_lblOrganismo")
+        data_tag = soup.find("span", id="ctl00_ContentPlaceHolder1_lblDataPublicacao")
 
         return {
             "cod": cod,
             "titulo": titulo,
-            "entidade": entidade or "",
-            "data": data or "",
+            "entidade": entidade_tag.text.strip() if entidade_tag else "",
+            "data": data_tag.text.strip() if data_tag else "",
             "link": url
         }
 
@@ -74,9 +71,30 @@ def main():
     ultimo_cod = carregar_estado()
 
     ofertas = []
-    cod = ultimo_cod + 50
+    cod = ultimo_cod + 30
     tentativas = 0
 
-    while len(ofertas) < TOTAL and tentativas < 300:
-        print(f"A testar {cod}")
+    print(f"Início em {cod}")
 
+    while len(ofertas) < TOTAL and tentativas < 200:
+        oferta = get_oferta(cod)
+
+        if oferta:
+            print(f"✔ {cod}")
+            ofertas.append(oferta)
+        else:
+            print(f"✖ {cod}")
+
+        cod -= 1
+        tentativas += 1
+        time.sleep(1)
+
+    if ofertas:
+        guardar_estado(max(o["cod"] for o in ofertas))
+
+    with open("data.json", "w", encoding="utf-8") as f:
+        json.dump(ofertas, f, ensure_ascii=False, indent=2)
+
+
+if __name__ == "__main__":
+    main()
