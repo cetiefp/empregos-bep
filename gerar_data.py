@@ -1,10 +1,3 @@
-import requests
-from bs4 import BeautifulSoup
-import json
-import time
-
-BASE_URL = "https://www.bep.gov.pt/pages/oferta/Oferta_Detalhes.aspx?CodOferta="
-
 def obter_oferta(cod):
     url = f"{BASE_URL}{cod}"
     try:
@@ -17,6 +10,7 @@ def obter_oferta(cod):
 
         titulo = soup.find("span", id="ctl00_ContentPlaceHolder1_lblTitulo")
         entidade = soup.find("span", id="ctl00_ContentPlaceHolder1_lblEntidade")
+        data = soup.find("span", id="ctl00_ContentPlaceHolder1_lblDataPublicacao")
 
         if not titulo:
             return None
@@ -25,32 +19,9 @@ def obter_oferta(cod):
             "cod": cod,
             "titulo": titulo.text.strip() if titulo else "",
             "entidade": entidade.text.strip() if entidade else "",
+            "data": data.text.strip() if data else "",
             "url": url
         }
 
     except:
         return None
-
-
-def obter_ultimas(n=20, start=148500):
-    resultados = []
-
-    cod = start
-
-    while len(resultados) < n and cod > 0:
-        oferta = obter_oferta(cod)
-
-        if oferta:
-            print(f"✔ Encontrado {cod}")
-            resultados.append(oferta)
-
-        cod -= 1
-        time.sleep(0.5)  # evitar bloqueio
-
-    return resultados
-
-
-dados = obter_ultimas()
-
-with open("data.json", "w", encoding="utf-8") as f:
-    json.dump(dados, f, ensure_ascii=False, indent=2)
