@@ -1,16 +1,16 @@
 [
   {
-    "titulo": "Técnico Informática",
+    "titulo": "Assistente Técnico",
     "entidade": "Câmara Municipal de Lisboa",
     "local": "Lisboa",
-    "prazo": "2026-06-01",
-    "link": "https://exemplo.pt"
+    "data": "2026-05-10",
+    "link": "https://example.com/anuncio1"
   },
   {
-    "titulo": "Assistente Administrativo",
-    "entidade": "Hospital São João",
+    "titulo": "Técnico Superior",
+    "entidade": "Universidade do Porto",
     "local": "Porto",
-    "prazo": "2026-05-25",
-    "link": "https://exemplo2.pt"
+    "data": "2026-05-12",
+    "link": "https://example.com/anuncio2"
   }
 ]
