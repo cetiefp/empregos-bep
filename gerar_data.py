@@ -31,7 +31,7 @@ def extrair_e_acumular():
         except:
             pass
 
-    # 2. Conecta à rota estável do RSS que não sofre de Connection Reset
+    # 2. Conecta à rota estável do RSS
     ip_bep = obter_ip_via_doh()
     url_rss = f"https://{ip_bep}/pages/oferta/Oferta_RSS.aspx"
     
@@ -47,26 +47,36 @@ def extrair_e_acumular():
             resposta.encoding = 'utf-8'
             texto_cru = resposta.text
             
-            # Isolamos os blocos <item> por texto puro, contornando o erro de 'duplicate attribute'
-            blocos_item = re.findall(r'<item>(.*?)</item>', texto_cru, re.DOTALL)
+            # IMPRIME UMA AMOSTRA DO TEXTO BRUTO PARA AUDITORIA CASO DÊ ERRO
+            print("\n=== AMOSTRA DO CONTEÚDO RECEBIDO DO SERVIDOR ===")
+            print(texto_cru[:1000])
+            print("================================================\n")
+            
+            # Procuramos por <item> ou <ITEM> usando re.IGNORECASE para evitar falhas de leitura
+            blocos_item = re.findall(r'<item>(.*?)</item>', texto_cru, re.DOTALL | re.IGNORECASE)
             print(f"Ligação bem-sucedida! Detetados {len(blocos_item)} anúncios no feed bruto.")
             
             novas_ofertas = []
             for bloco in blocos_item:
-                # Procura as tags internas usando expressões regulares simples
-                match_title = re.search(r'<title>(.*?)</title>', bloco, re.DOTALL)
-                match_link = re.search(r'<link>(.*?)</link>', bloco, re.DOTALL)
-                match_desc = re.search(r'<description>(.*?)</description>', bloco, re.DOTALL)
+                # Procura as tags internas ignorando se são maiúsculas ou minúsculas
+                match_title = re.search(r'<title>(.*?)</title>', bloco, re.DOTALL | re.IGNORECASE)
+                match_link = re.search(r'<link>(.*?)</link>', bloco, re.DOTALL | re.IGNORECASE)
+                match_desc = re.search(r'<description>(.*?)</description>', bloco, re.DOTALL | re.IGNORECASE)
                 
                 titulo_completo = match_title.group(1).strip() if match_title else "Oferta de Emprego"
                 link_original = match_link.group(1).strip() if match_link else ""
                 descricao_completa = match_desc.group(1).strip() if match_desc else ""
                 
-                # Garante que os URLs públicos contêm o subdomínio www
+                # Remove marcações CDATA se o servidor da BEP as incluir no texto
+                titulo_completo = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', titulo_completo, flags=re.DOTALL)
+                link_original = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', link_original, flags=re.DOTALL)
+                descricao_completa = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', descricao_completa, flags=re.DOTALL)
+                
+                # Garante o subdomínio www
                 if link_original and "www." not in link_original:
                     link_original = link_original.replace("https://bep.gov.pt", "https://bep.gov.pt")
                 
-                # Isola o CodOferta numérico (ex: 148573)
+                # Isola o CodOferta numérico
                 match_id = re.search(r"CodOferta=(\d+)", link_original)
                 id_vaga = int(match_id.group(1)) if match_id else 0
                 
@@ -100,18 +110,17 @@ def extrair_e_acumular():
                             }
                         }
                     })
-                    print(f"-> Vaga extraída textualmente: ID {id_vaga} - {titulo_vaga}")
+                    print(f"-> Vaga extraída: ID {id_vaga} - {titulo_vaga}")
             
-            # 3. Fusão incremental (Merge) sem duplicados baseada no ID único
+            # 3. Fusão incremental (Merge) sem duplicados
             vagas_mapeadas = {vaga["id"]: vaga for vaga in ofertas_antigas}
             for nova_vaga in novas_ofertas:
                 vagas_mapeadas[nova_vaga["id"]] = nova_vaga
                 
-            # Ordena do mais recente para o mais antigo
             lista_ordenada = sorted(vagas_mapeadas.values(), key=lambda x: x["id"], reverse=True)
             lista_final = lista_ordenada[:200]
             
-            # Grava as atualizações finais no repositório
+            # Grava os resultados
             with open(ficheiro_dados, "w", encoding="utf-8") as f:
                 json.dump(lista_final, f, ensure_ascii=False, indent=4)
                 
@@ -125,6 +134,5 @@ def extrair_e_acumular():
         print(f"Falha na extração de texto: {e}")
 
 if __name__ == "__main__":
-    # Desativa avisos visuais de SSL devido à ligação por IP
     requests.packages.urllib3.disable_warnings()
     extrair_e_acumular()
