@@ -12,31 +12,24 @@ jobs:
   recortar-e-publicar:
     runs-on: ubuntu-latest
     steps:
-    - name: Descarregar Código
+    - name: Descarregar Código do Repositório
       uses: actions/checkout@v4
 
-    - name: Configurar Python
+    - name: Configurar Ambiente Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
-    - name: Forçar IP do Estado Português no Sistema
-      # Este comando mapeia o domínio diretamente para o IP correto, ignorando o DNS avariado do GitHub
-      run: |
-        echo "185.34.133.19 www.bep.gov.pt bep.gov.pt" | sudo tee -a /etc/hosts
+    - name: Instalar Dependência Requests
+      run: pip install requests
 
-    - name: Descarregar XML da BEP
-      # Usamos obrigatoriamente o link oficial completo com o www. que mapeámos acima
-      run: |
-        curl -s -L -k -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://bep.gov.pt" -o feed.xml
-
-    - name: Executar o Scraper Python
+    - name: Executar Atualização e Acumulação Python
       run: python gerar_data.py
 
-    - name: Atualizar Repositório
+    - name: Gravar Histórico Incremental no Repositório
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@://github.com"
         git add data.json estado.json
-        git commit -m "Sistema: Atualização automática de dados da BEP" || echo "Sem novidades"
+        git commit -m "Sistema: Atualização incremental automática (Máx 200)" || echo "Sem novidades no feed."
         git push origin main
