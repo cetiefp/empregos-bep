@@ -1,22 +1,4 @@
-import json
-
-def main():
-    dados = [
-        {
-            "cod": 123,
-            "titulo": "Teste",
-            "entidade": "Teste Entidade",
-            "data": "2026-05-17",
-            "link": "https://www.bep.gov.pt"
-        }
-    ]
-
-    with open("data.json", "w", encoding="utf-8") as f:
-        json.dump(dados, f, ensure_ascii=False, indent=2)
-
-
-if __name__ == "__main__":
-    main()import requests
+import requests
 from bs4 import BeautifulSoup
 import json
 import time
@@ -71,3 +53,35 @@ def get_oferta(cod):
             "cod": cod,
             "titulo": titulo,
             "entidade": entidade_tag.text.strip() if entidade_tag else "",
+            "data": data_tag.text.strip() if data_tag else "",
+            "link": url
+        }
+
+    except Exception:
+        return None
+
+def main():
+    ultimo_cod = carregar_estado()
+
+    ofertas = []
+    cod = ultimo_cod + 30
+    tentativas = 0
+
+    while len(ofertas) < TOTAL and tentativas < 50:
+        oferta = get_oferta(cod)
+
+        if oferta:
+            ofertas.append(oferta)
+
+        cod -= 1
+        tentativas += 1
+        time.sleep(0.2)
+
+    if ofertas:
+        guardar_estado(max(o["cod"] for o in ofertas))
+
+    with open("data.json", "w", encoding="utf-8") as f:
+        json.dump(ofertas, f, ensure_ascii=False, indent=2)
+
+if __name__ == "__main__":
+    main()
